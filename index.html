@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文赫文理補習班 - 家長學生專區</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body class="bg-slate-100 font-sans min-h-screen pb-12">
+
+    <script>
+        // 鎖定後端 API 網址
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbzmwMwYOWDGxCn0163klj9KFunGHBsvfUqeZzVoTqHem1TpJUvrpK-mJ07JZhSfcucUGg/exec";
+    </script>
+
+    <!-- 跨域提交通道 -->
+    <iframe name="hidden_upload_frame" id="hidden_upload_frame" style="display:none;"></iframe>
+
+    <!-- 頂部導覽列 -->
+    <header class="bg-indigo-600 text-white shadow-md sticky top-0 z-40">
+        <div class="max-w-md mx-auto px-4 py-4 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <span class="text-2xl">🏫</span>
+                <div>
+                    <h1 class="text-lg font-bold leading-tight">文赫文理補習班</h1>
+                    <p class="text-[11px] text-indigo-200">家長與學生個人學習專區</p>
+                </div>
+            </div>
+            <button id="btn-logout" onclick="logoutStudent()" class="hidden text-xs bg-indigo-700 hover:bg-indigo-800 px-3 py-1.5 rounded-lg text-white font-medium transition">登出</button>
+        </div>
+    </header>
+
+    <main class="max-w-md mx-auto px-4 mt-6">
+
+        <!-- 登入驗證卡片 -->
+        <section id="login-section" class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-5">
+            <div class="text-center space-y-1">
+                <div class="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center text-xl mx-auto mb-2">🔐</div>
+                <h2 class="text-xl font-bold text-slate-800">學生身分驗證</h2>
+                <p class="text-xs text-slate-500">請輸入學生姓名與留存的家長電話後 4 碼以查閱資訊</p>
+            </div>
+
+            <form onsubmit="handleStudentLogin(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 mb-1">學生中文姓名</label>
+                    <input type="text" id="login-name" required placeholder="例如：王小明" class="w-full px-3.5 py-2.5 border rounded-xl text-sm font-bold focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 mb-1">家長聯絡電話後 4 碼</label>
+                    <input type="password" maxlength="4" pattern="\d{4}" id="login-phone4" required placeholder="例如：1234" class="w-full px-3.5 py-2.5 border rounded-xl text-sm font-bold text-center tracking-widest focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                </div>
+                <button type="submit" id="btn-login-submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl text-sm shadow-md transition">🔍 登入查閱學習進度</button>
+            </form>
+            <p class="text-[11px] text-slate-400 text-center">※ 如電話有變更或無法查詢，請直接向補習班主任聯繫。</p>
+        </section>
+
+        <!-- 學生專區內容面板 (登入後顯示) -->
+        <section id="content-section" class="hidden space-y-5">
+
+            <!-- 學生個人資訊頂部卡 -->
+            <div class="bg-linear-to-r from-indigo-600 to-indigo-700 text-white p-5 rounded-2xl shadow-md space-y-3">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <span class="text-xs bg-indigo-500/80 px-2 py-0.5 rounded-md font-medium" id="stu-class-badge">班級載入中...</span>
+                        <h2 class="text-2xl font-black mt-1" id="stu-name-display">學生姓名</h2>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-[11px] text-indigo-200">獎勵點數餘額</div>
+                        <div class="text-2xl font-black text-amber-300 mt-0.5" id="stu-points-display">0 點</div>
+                    </div>
+                </div>
+                <div class="border-t border-indigo-500/50 pt-2 flex justify-between text-xs text-indigo-100">
+                    <div>學費狀態：<span id="stu-fee-badge" class="font-bold">--</span></div>
+                    <div>學校：<span id="stu-school-display">--</span></div>
+                </div>
+            </div>
+
+            <!-- 分頁切換選單 -->
+            <div class="flex bg-slate-200 p-1 rounded-xl text-xs font-bold text-slate-600">
+                <button onclick="switchParentTab('tab-contact')" id="btn-tab-contact" class="flex-1 py-2 rounded-lg bg-white text-indigo-700 shadow-xs transition">📝 聯絡簿</button>
+                <button onclick="switchParentTab('tab-scores')" id="btn-tab-scores" class="flex-1 py-2 rounded-lg hover:text-indigo-600 transition">📊 成績單</button>
+                <button onclick="switchParentTab('tab-attendance')" id="btn-tab-attendance" class="flex-1 py-2 rounded-lg hover:text-indigo-600 transition">⏱️ 出缺席</button>
+            </div>
+
+            <!-- 1. 聯絡簿分頁 -->
+            <div id="tab-contact" class="parent-tab space-y-4">
+                <div class="flex justify-between items-center px-1">
+                    <h3 class="text-sm font-bold text-slate-800">最新聯絡簿內容</h3>
+                    <span class="text-[11px] text-slate-500" id="cb-latest-date">--</span>
+                </div>
+
+                <div id="cb-card-container" class="space-y-3">
+                    <div class="p-6 bg-white rounded-2xl text-center text-slate-400 text-xs border border-slate-200">載入中...</div>
+                </div>
+            </div>
+
+            <!-- 2. 成績單分頁 -->
+            <div id="tab-scores" class="parent-tab hidden space-y-3">
+                <div class="flex justify-between items-center px-1">
+                    <h3 class="text-sm font-bold text-slate-800">測驗與月考成績紀錄</h3>
+                    <span class="text-[11px] text-slate-500">最近成績列表</span>
+                </div>
+                <div id="scores-container" class="space-y-2">
+                    <div class="p-6 bg-white rounded-2xl text-center text-slate-400 text-xs border border-slate-200">目前尚無成績紀錄。</div>
+                </div>
+            </div>
+
+            <!-- 3. 出缺席分頁 -->
+            <div id="tab-attendance" class="parent-tab hidden space-y-3">
+                <div class="flex justify-between items-center px-1">
+                    <h3 class="text-sm font-bold text-slate-800">出缺席紀錄</h3>
+                    <span class="text-[11px] text-slate-500">近一個月出勤狀態</span>
+                </div>
+                <div id="attendance-container" class="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100 overflow-hidden text-xs">
+                    <div class="p-6 text-center text-slate-400">尚無出勤紀錄。</div>
+                </div>
+            </div>
+
+        </section>
+    </main>
+
+    <script>
+        let allCloudData = null;
+        let currentStudent = null;
+
+        // 提交跨域請求
+        function sendToGasDirect(dataObj) {
+            let ifr = document.getElementById('hidden_upload_frame');
+            if (!ifr) {
+                ifr = document.createElement('iframe');
+                ifr.name = 'hidden_upload_frame';
+                ifr.id = 'hidden_upload_frame';
+                ifr.style.display = 'none';
+                document.body.appendChild(ifr);
+            }
+
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = GAS_URL;
+            form.target = 'hidden_upload_frame';
+            form.style.display = 'none';
+
+            for (let k in dataObj) {
+                const inp = document.createElement('input');
+                inp.type = 'hidden';
+                inp.name = k;
+                inp.value = dataObj[k];
+                form.appendChild(inp);
+            }
+            document.body.appendChild(form);
+            form.submit();
+            setTimeout(() => form.remove(), 1500);
+        }
+
+        async function fetchAllDataOnce() {
+            try {
+                const res = await fetch(GAS_URL + '?t=' + Date.now());
+                allCloudData = await res.json();
+            } catch (err) {
+                console.error('抓取雲端資料失敗', err);
+            }
+        }
+
+        // 登入驗證
+        async function handleStudentLogin(e) {
+            e.preventDefault();
+            const btn = document.getElementById('btn-login-submit');
+            btn.innerText = '驗證資料中...';
+            btn.disabled = true;
+
+            if (!allCloudData) {
+                await fetchAllDataOnce();
+            }
+
+            const inputName = document.getElementById('login-name').value.trim().replace(/\s+/g, '');
+            const inputPhone4 = document.getElementById('login-phone4').value.trim();
+
+            const student = (allCloudData.students || []).find(s => {
+                const sName = (s.name || '').trim().replace(/\s+/g, '');
+                const sPhone = (s.phone || '').toString().trim().replace(/[^0-9]/g, '');
+                const sPhoneLast4 = sPhone.slice(-4);
+                return (sName === inputName && sPhoneLast4 === inputPhone4);
+            });
+
+            if (!student) {
+                btn.innerText = '🔍 登入查閱學習進度';
+                btn.disabled = false;
+                alert('⚠️ 查無此學生或電話後4碼不符！\n請確認學生姓名與留在補習班的手機號碼末4碼。');
+                return;
+            }
+
+            currentStudent = student;
+            btn.innerText = '🔍 登入查閱學習進度';
+            btn.disabled = false;
+
+            // 成功登入，切換畫面
+            document.getElementById('login-section').classList.add('hidden');
+            document.getElementById('content-section').classList.remove('hidden');
+            document.getElementById('btn-logout').classList.remove('hidden');
+
+            renderStudentPortal();
+        }
+
+        function logoutStudent() {
+            currentStudent = null;
+            document.getElementById('login-section').classList.remove('hidden');
+            document.getElementById('content-section').classList.add('hidden');
+            document.getElementById('btn-logout').classList.add('hidden');
+            document.getElementById('login-name').value = '';
+            document.getElementById('login-phone4').value = '';
+        }
+
+        function switchParentTab(tabId) {
+            document.querySelectorAll('.parent-tab').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('#btn-tab-contact, #btn-tab-scores, #btn-tab-attendance').forEach(btn => {
+                btn.className = "flex-1 py-2 rounded-lg hover:text-indigo-600 transition";
+            });
+
+            document.getElementById(tabId).classList.remove('hidden');
+            const activeBtn = document.getElementById(`btn-${tabId}`);
+            activeBtn.className = "flex-1 py-2 rounded-lg bg-white text-indigo-700 shadow-xs transition font-bold";
+        }
+
+        function renderStudentPortal() {
+            if (!currentStudent || !allCloudData) return;
+
+            const sIdClean = currentStudent.id.toString().trim().replace(/^'/, '');
+
+            // 1. 頂部基本資訊
+            document.getElementById('stu-name-display').innerText = currentStudent.name;
+            document.getElementById('stu-class-badge').innerText = currentStudent.className || '未分配班級';
+            document.getElementById('stu-school-display').innerText = currentStudent.school || '--';
+
+            // 2. 計算點數餘額
+            let earned = 0, spent = 0;
+            (allCloudData.points || []).forEach(p => {
+                if (p.studentId.toString().trim().replace(/^'/, '') === sIdClean) {
+                    const pts = parseFloat(p.points) || 0;
+                    if (p.type === '兌換扣點' || p.type === '扣點') spent += pts;
+                    else earned += pts;
+                }
+            });
+            document.getElementById('stu-points-display').innerText = `${earned - spent} 點`;
+
+            // 3. 本月學費狀態
+            const currentMonth = new Date().toISOString().slice(0, 7);
+            const feeRecord = (allCloudData.payments || []).find(p => p.studentId.toString().trim().replace(/^'/, '') === sIdClean && p.month === currentMonth);
+            const feeBadge = document.getElementById('stu-fee-badge');
+            if (feeRecord) {
+                const remain = (feeRecord.targetAmount || 0) - (feeRecord.paidAmount || 0);
+                if (remain <= 0 && feeRecord.targetAmount > 0) {
+                    feeBadge.innerHTML = '<span class="text-emerald-300 font-bold">✅ 當月已結清</span>';
+                } else if (feeRecord.paidAmount > 0) {
+                    feeBadge.innerHTML = `<span class="text-amber-300 font-bold">🟡 已繳 NT$${feeRecord.paidAmount} (尚欠 NT$${remain})</span>`;
+                } else {
+                    feeBadge.innerHTML = '<span class="text-rose-300 font-bold">❌ 待繳納</span>';
+                }
+            } else {
+                feeBadge.innerHTML = '<span class="text-indigo-200">無收費單</span>';
+            }
+
+            // 4. 渲染聯絡簿
+            renderContactBookTab(sIdClean);
+
+            // 5. 渲染成績單
+            renderScoresTab(sIdClean);
+
+            // 6. 渲染出缺席
+            renderAttendanceTab(sIdClean);
+        }
+
+        // 聯絡簿渲染與簽名
+        function renderContactBookTab(sIdClean) {
+            const container = document.getElementById('cb-card-container');
+            const stuCbs = (allCloudData.contactBooks || []).filter(cb => cb.studentId.toString().trim().replace(/^'/, '') === sIdClean);
+
+            if (stuCbs.length === 0) {
+                container.innerHTML = `<div class="p-8 bg-white rounded-2xl text-center text-slate-400 text-xs border border-slate-200">目前尚無專屬聯絡簿通知。</div>`;
+                return;
+            }
+
+            stuCbs.sort((a, b) => new Date(b.date) - new Date(a.date));
+            document.getElementById('cb-latest-date').innerText = `最新：${stuCbs[0].date}`;
+
+            container.innerHTML = '';
+            stuCbs.forEach(cb => {
+                const isSigned = (cb.signatureStatus === '已簽名' || cb.signatureStatus === '家長已簽名');
+                container.innerHTML += `
+                    <div class="bg-white p-5 rounded-2xl shadow-xs border border-slate-200 space-y-3">
+                        <div class="flex justify-between items-center border-b border-slate-100 pb-2">
+                            <span class="text-xs font-mono font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-md">🗓️ ${cb.date}</span>
+                            <div>
+                                ${isSigned ? 
+                                    '<span class="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">✍️ 家長已線上簽名</span>' : 
+                                    `<button onclick="parentSignContactBook('${sIdClean}', '${cb.date}')" class="text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white px-3 py-1 rounded-full shadow-xs transition animate-pulse">✍️ 點此完成簽名</button>`
+                                }
+                            </div>
+                        </div>
+
+                        <div class="space-y-2 text-xs">
+                            <div>
+                                <span class="font-bold text-slate-500 block mb-0.5">📖 上課學習進度：</span>
+                                <div class="bg-slate-50 p-2.5 rounded-xl text-slate-800 font-medium">${cb.classWork || '無特殊備註'}</div>
+                            </div>
+                            <div>
+                                <span class="font-bold text-slate-500 block mb-0.5">✏️ 指定回家作業：</span>
+                                <div class="bg-slate-50 p-2.5 rounded-xl text-slate-800 font-medium">${cb.homework || '無指定作業'}</div>
+                            </div>
+                            <div>
+                                <span class="font-bold text-indigo-700 block mb-0.5">💬 老師課堂評語：</span>
+                                <div class="bg-indigo-50/60 p-2.5 rounded-xl text-indigo-950 font-medium border border-indigo-100">${cb.teacherNote || '表現良好，請繼續保持！'}</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        // 家長線上簽名
+        function parentSignContactBook(sIdClean, date) {
+            if (!confirm(`確認要為 ${date} 的聯絡簿進行線上簽名確認嗎？`)) return;
+
+            const targetCb = (allCloudData.contactBooks || []).find(cb => cb.studentId.toString().trim().replace(/^'/, '') === sIdClean && cb.date === date);
+            if (targetCb) {
+                targetCb.signatureStatus = '家長已簽名';
+            }
+
+            renderContactBookTab(sIdClean);
+
+            sendToGasDirect({
+                action: 'saveContactBook',
+                studentId: sIdClean,
+                date: date,
+                signatureStatus: '家長已簽名'
+            });
+
+            alert('🎉 已成功完成線上簽名！老師後台將會即時同步您的簽名紀錄。');
+        }
+
+        // 成績單渲染
+        function renderScoresTab(sIdClean) {
+            const container = document.getElementById('scores-container');
+            const stuScores = (allCloudData.scores || []).filter(sc => sc.studentId.toString().trim().replace(/^'/, '') === sIdClean);
+
+            if (stuScores.length === 0) {
+                container.innerHTML = `<div class="p-8 bg-white rounded-2xl text-center text-slate-400 text-xs border border-slate-200">目前尚無測驗成績紀錄。</div>`;
+                return;
+            }
+
+            container.innerHTML = '';
+            stuScores.forEach(sc => {
+                let badgeColor = 'text-emerald-700 bg-emerald-50 border-emerald-200';
+                if (sc.value < 60) badgeColor = 'text-rose-700 bg-rose-50 border-rose-200';
+                else if (sc.value < 80) badgeColor = 'text-amber-700 bg-amber-50 border-amber-200';
+
+                container.innerHTML += `
+                    <div class="bg-white p-4 rounded-xl border border-slate-200 flex items-center justify-between text-xs shadow-xs">
+                        <div>
+                            <div class="font-bold text-slate-800 text-sm">${sc.title || '測驗小考'}</div>
+                            <div class="text-[11px] text-slate-400 mt-0.5">🗓️ ${sc.scoreDate || '--'} · <span class="text-indigo-600 font-medium">${sc.type || '小考'}</span></div>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-lg font-black px-3 py-1 rounded-xl border ${badgeColor}">${sc.value} 分</span>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        // 出缺席渲染
+        function renderAttendanceTab(sIdClean) {
+            const container = document.getElementById('attendance-container');
+            const attMap = allCloudData.attendance || {};
+            const reasonMap = allCloudData.attendanceReasons || {};
+            const dates = Object.keys(attMap).sort().reverse();
+
+            let hasRecord = false;
+            let html = '';
+
+            dates.forEach(d => {
+                if (attMap[d] && attMap[d][sIdClean]) {
+                    hasRecord = true;
+                    const st = attMap[d][sIdClean];
+                    const r = (reasonMap[d] && reasonMap[d][sIdClean]) ? reasonMap[d][sIdClean] : '';
+
+                    let badge = '<span class="text-emerald-600 font-bold bg-emerald-50 px-2.5 py-1 rounded-full">🟢 出席</span>';
+                    if (st === 'late') badge = '<span class="text-amber-600 font-bold bg-amber-50 px-2.5 py-1 rounded-full">🟡 遲到</span>';
+                    else if (st === 'leave') badge = '<span class="text-blue-600 font-bold bg-blue-50 px-2.5 py-1 rounded-full">🔵 請假</span>';
+                    else if (st === 'absent') badge = '<span class="text-rose-600 font-bold bg-rose-50 px-2.5 py-1 rounded-full">🔴 缺席</span>';
+
+                    html += `
+                        <div class="p-3.5 flex items-center justify-between hover:bg-slate-50">
+                            <div>
+                                <span class="font-mono font-bold text-slate-700">${d}</span>
+                                ${r ? `<div class="text-[11px] text-slate-400 mt-0.5">事由：${r}</div>` : ''}
+                            </div>
+                            <div>${badge}</div>
+                        </div>
+                    `;
+                }
+            });
+
+            if (!hasRecord) {
+                container.innerHTML = `<div class="p-8 text-center text-slate-400">目前尚無近期出缺席紀錄。</div>`;
+            } else {
+                container.innerHTML = html;
+            }
+        }
+
+        // 網頁開啟即預載資料
+        fetchAllDataOnce();
+    </script>
+</body>
+</html>
